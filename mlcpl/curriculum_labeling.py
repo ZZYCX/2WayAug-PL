@@ -30,7 +30,7 @@ class CurriculumLabeling(Dataset):
     def getitem(self, idx):
         return self.__getitem__(idx)
     
-    def update(self, model, batch_size=32, num_workers=20, thresholds=(-4, 4), device='cuda', verbose=False):
+    def update(self, model, batch_size=32, num_workers=20, thresholds=(-4, 4), device=None, verbose=False):
         temp = self.dataset.transform
         self.dataset.transform = self.transform_for_update
 

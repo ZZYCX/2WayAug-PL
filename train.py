@@ -116,7 +116,12 @@ def main():
             torch.save(ema.module.state_dict(), os.path.join(output_dir, 'best.pth'))
 
         if epoch >= (config.E-1): # -1 becasue epoch starts from 0
-            train_dataset_cl.update(ema.module, thresholds=config.thresholds, device=device)
+            train_dataset_cl.update(
+                ema.module,
+                batch_size=config.batch_size,
+                thresholds=config.thresholds,
+                device=device,
+            )
 
         epoch_end_time = time.time()
         print(f'[{timestamp()}] Epoch end: {epoch+1}/{config.epochs}. Total time: {(epoch_end_time-epoch_start_time):.2f} sec')
