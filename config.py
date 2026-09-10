@@ -3,8 +3,12 @@ import torchvision
 
 # config the dataset here
 
-train_dataset = dataset.MSCOCO('/Users/max/Documents/datasets/COCO', split='train').drop_labels_random(0.5)
-valid_dataset = dataset.MSCOCO('/Users/max/Documents/datasets/COCO', split='valid')
+#单卡4090
+train_dataset = dataset.MSCOCO('/home/sx639/GZS/coco2014/', split='train').drop_labels_random(0.1)
+valid_dataset = dataset.MSCOCO('/home/sx639/GZS/coco2014/', split='valid')
+#多卡4090
+# train_dataset = dataset.MSCOCO('/media/ubuntu2/A/coco2014', split='train').drop_labels_random(0.1)
+# valid_dataset = dataset.MSCOCO('/media/ubuntu2/A/coco2014', split='valid')
 
 ## example: VG-200 with label proportion 10%
 # train_dataset = dataset.VG_200('/Users/max/Documents/datasets/VG', split='train').drop_labels_random(0.1)
@@ -21,7 +25,7 @@ batch_size = 32
 accum_step = 4
 lr = 2e-4
 epochs = 60
-early_stopping = 10
+early_stopping = 30
 ema = 0.999
 weight_decay = 1e-4
 
@@ -44,4 +48,4 @@ data_aug = (
     # torchvision.transforms.LinearTransformation(),
 )
 
-device = 'mps'
+device = 'cuda:0'

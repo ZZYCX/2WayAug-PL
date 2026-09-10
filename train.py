@@ -69,13 +69,27 @@ def main():
 
     best_score = 0
     best_at_epoch = -1
+    optimizer_step = 0
 
     for epoch in range(config.epochs):
-        print(f'Epoch: {epoch}/{config.epochs}')
+        print(f'[{timestamp()}] Epoch start: {epoch+1}/{config.epochs}')
         epoch_start_time = time.time()
 
         # Train Loop
-        losses = train(model, train_dataloader, loss_fn_original, loss_fn_aug, optimizer, scheduler, model_ema=ema, grad_accum_steps=config.accum_step, device=device)
+        losses, optimizer_step = train(
+            model,
+            train_dataloader,
+            loss_fn_original,
+            loss_fn_aug,
+            optimizer,
+            scheduler,
+            model_ema=ema,
+            grad_accum_steps=config.accum_step,
+            device=device,
+            epoch=epoch,
+            total_epochs=config.epochs,
+            optimizer_step=optimizer_step,
+        )
 
         logger.add('train_loss', torch.mean(losses).detach().numpy())
 
@@ -89,23 +103,28 @@ def main():
         
             if name == monitor_validation_metric_name:
                 current_score = result
+                print(
+                    f'[{timestamp()}] Epoch validation: epoch={epoch+1}/{config.epochs} '
+                    f'optimizer_step={optimizer_step} lr={get_lr(optimizer):.8f} '
+                    f'validation_mAP={current_score:.4f}'
+                )
 
         if current_score > best_score:
             best_score = current_score
             best_at_epoch = epoch
-            print(f'New best {monitor_validation_metric_name}: {best_score:.4f}')
+            print(f'[{timestamp()}] New best {monitor_validation_metric_name}: {best_score:.4f}')
             torch.save(ema.module.state_dict(), os.path.join(output_dir, 'best.pth'))
 
         if epoch >= (config.E-1): # -1 becasue epoch starts from 0
-            train_dataset_cl.update(ema.module, thresholds=config.thresholds)
+            train_dataset_cl.update(ema.module, thresholds=config.thresholds, device=device)
 
         epoch_end_time = time.time()
-        print(f'Epoch end. Total time: {(epoch_end_time-epoch_start_time):.2f} sec')
+        print(f'[{timestamp()}] Epoch end: {epoch+1}/{config.epochs}. Total time: {(epoch_end_time-epoch_start_time):.2f} sec')
         print()
 
         if config.early_stopping is not None:
             if epoch - best_at_epoch >= config.early_stopping:
-                print('Early stopping.')
+                print(f'[{timestamp()}] Early stopping.')
                 break
 
     logger.flush()

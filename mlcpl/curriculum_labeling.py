@@ -1,6 +1,10 @@
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import torch
+from datetime import datetime
+
+def timestamp():
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 class CurriculumLabeling(Dataset):
     def __init__(self, dataset, transform_for_update=None):
@@ -26,7 +30,7 @@ class CurriculumLabeling(Dataset):
     def getitem(self, idx):
         return self.__getitem__(idx)
     
-    def update(self, model, batch_size=32, num_workers=20, thresholds=(-4, 4), verbose=False):
+    def update(self, model, batch_size=32, num_workers=20, thresholds=(-4, 4), device='cuda', verbose=False):
         temp = self.dataset.transform
         self.dataset.transform = self.transform_for_update
 
@@ -37,14 +41,14 @@ class CurriculumLabeling(Dataset):
         with torch.no_grad():
             for batch, (x, y) in enumerate(dataloader):
                 if not verbose:
-                    print(f'Updating Labels: {batch+1}/{len(dataloader)}', end='\r')
+                    print(f'[{timestamp()}] Updating labels batch={batch+1}/{len(dataloader)}')
 
-                x, y = x.to('cuda'), y.to('cuda')
+                x, y = x.to(device), y.to(device)
                 logit = model(x)
                 
                 label = torch.sign(logit)
                 label = torch.where(label==-1, 0, label)
-                self.labels[batch*batch_size: (batch+1)*batch_size] = label
+                self.labels[batch*batch_size: (batch+1)*batch_size] = label.cpu()
 
                 negative_threshold, positive_threshold = thresholds
                 negative_selection = torch.where(logit<negative_threshold, 1, 0)
@@ -52,7 +56,7 @@ class CurriculumLabeling(Dataset):
 
                 selection = torch.logical_or(negative_selection, positive_selection)
                 
-                self.selections[batch*batch_size: (batch+1)*batch_size] = torch.logical_and(selection, torch.isnan(y))
+                self.selections[batch*batch_size: (batch+1)*batch_size] = torch.logical_and(selection, torch.isnan(y)).cpu()
         
         if not verbose:
             print()

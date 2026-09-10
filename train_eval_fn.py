@@ -1,9 +1,22 @@
 import torch
 import numpy as np
+from datetime import datetime
 
-def train(model, dataloader, loss_fn_original, loss_fn_aug, optimizer, scheduler=None, model_ema=None, device='cuda', grad_accum_steps=1, verbose=False):
+def timestamp():
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+def _progress_points(total, count):
+    if total <= 0:
+        return set()
+    return {min(total, max(1, int(np.ceil(total * i / count)))) for i in range(1, count + 1)}
+
+def get_lr(optimizer):
+    return optimizer.param_groups[0]['lr']
+
+def train(model, dataloader, loss_fn_original, loss_fn_aug, optimizer, scheduler=None, model_ema=None, device='cuda', grad_accum_steps=1, verbose=False, epoch=None, total_epochs=None, optimizer_step=0, log_count=5):
 
     losses = torch.zeros(len(dataloader))
+    log_batches = _progress_points(len(dataloader), log_count)
 
     model.train()
 
@@ -21,6 +34,7 @@ def train(model, dataloader, loss_fn_original, loss_fn_aug, optimizer, scheduler
 
         if (batch + 1) % grad_accum_steps == 0 or (batch + 1) == len(dataloader):
             optimizer.step()
+            optimizer_step += 1
 
             if scheduler is not None:
                 scheduler.step()
@@ -32,13 +46,16 @@ def train(model, dataloader, loss_fn_original, loss_fn_aug, optimizer, scheduler
 
         losses[batch] = loss.detach().cpu()
 
-        if verbose is False:
-            print(f'Training... Batch: {batch}/{len(dataloader)}, Train loss: {loss:.4f}', end='\r')
+        if verbose is False and (batch + 1) in log_batches:
+            avg_loss = losses[:batch+1].mean().item()
+            epoch_text = f'{epoch + 1}/{total_epochs}' if epoch is not None and total_epochs is not None else '-'
+            print(
+                f'[{timestamp()}] Train epoch={epoch_text} batch={batch+1}/{len(dataloader)} '
+                f'optimizer_step={optimizer_step} lr={get_lr(optimizer):.8f} '
+                f'loss={loss.item():.4f} avg_loss={avg_loss:.4f}'
+            )
     
-    if verbose is False:
-        print()
-
-    return losses
+    return losses, optimizer_step
 
 def evaluate(model, dataloader, device='cuda', verbose=False):
     num_samples = len(dataloader.dataset)
@@ -49,6 +66,7 @@ def evaluate(model, dataloader, device='cuda', verbose=False):
     targets = torch.zeros((num_samples, num_categories))
 
     model.eval()
+    log_batches = _progress_points(len(dataloader), 3)
 
     with torch.no_grad():
         for batch, (x, y) in enumerate(dataloader):
@@ -57,7 +75,7 @@ def evaluate(model, dataloader, device='cuda', verbose=False):
             preds[batch*batch_size: (batch+1)*batch_size, :] = pred.detach().cpu()
             targets[batch*batch_size: (batch+1)*batch_size, :] = y.detach().cpu()
 
-            print(f'Validating... Batch: {batch}/{len(dataloader)}', end='\r')
-        print()
+            if verbose is False and (batch + 1) in log_batches:
+                print(f'[{timestamp()}] Validating batch={batch+1}/{len(dataloader)}')
 
     return preds, targets
