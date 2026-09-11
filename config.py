@@ -21,6 +21,9 @@ valid_dataset = dataset.MSCOCO('/home/sx639/GZS/coco2014/', split='valid')
 
 image_size = (448, 448)
 
+seed = 42
+num_workers = 8
+
 batch_size = 32
 accum_step = 4
 lr = 2e-4

@@ -1,4 +1,6 @@
 import math
+import random
+import numpy as np
 import torchmetrics
 from mlcpl.loss import *
 from torch.utils.data import DataLoader
@@ -14,6 +16,28 @@ import time
 from train_eval_fn import *
 from mlcpl.sample_mix import *
 from mlcpl.curriculum_labeling import CurriculumLabeling
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
+def make_dataloader(dataset, *, shuffle, num_workers=None):
+    """Recreate workers each epoch so curriculum-label updates remain visible."""
+    if num_workers is None:
+        num_workers = int(os.environ.get('DATALOADER_NUM_WORKERS', str(config.num_workers)))
+    if num_workers < 0:
+        raise ValueError('DATALOADER_NUM_WORKERS must be non-negative')
+    # Separate generators keep training shuffle independent of validation.
+    generator = torch.Generator()
+    generator.manual_seed(config.seed)
+    return DataLoader(
+        dataset, batch_size=config.batch_size, num_workers=num_workers,
+        shuffle=shuffle, persistent_workers=False,
+        worker_init_fn=seed_worker, generator=generator,
+    )
+
 
 def main():
     device = config.device
@@ -51,8 +75,9 @@ def main():
     }
     monitor_validation_metric_name = 'mAP@C'
 
-    train_dataloader = DataLoader(train_dataset_mix, batch_size=config.batch_size, num_workers=0, shuffle=True)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=config.batch_size, num_workers=0, shuffle=False)
+    train_dataloader = make_dataloader(train_dataset_mix, shuffle=True)
+    valid_dataloader = make_dataloader(valid_dataset, shuffle=False)
+    print(f'DataLoader num_workers={train_dataloader.num_workers}, seed={config.seed}')
     
     model = model.to(device)
     parameters = add_weight_decay(model, weight_decay=config.weight_decay)
@@ -120,6 +145,7 @@ def main():
             train_dataset_cl.update(
                 ema.module,
                 batch_size=config.batch_size,
+                num_workers=train_dataloader.num_workers,
                 thresholds=config.thresholds,
                 device=device,
             )
