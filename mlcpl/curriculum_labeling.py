@@ -37,12 +37,15 @@ class CurriculumLabeling(Dataset):
         dataloader = DataLoader(self.dataset, batch_size=batch_size, num_workers=num_workers)
 
         model.eval()
+        ground_truth = getattr(self.dataset, 'ground_truth', None)
+        # Counts: hidden positives/negatives, selected positives/negatives, correct positives/negatives.
+        counts = torch.zeros(6, dtype=torch.int64)
+
+        if not verbose:
+            print(f'[{timestamp()}] Pseudo-label update started: batches={len(dataloader)}', flush=True)
 
         with torch.no_grad():
             for batch, (x, y) in enumerate(dataloader):
-                if not verbose:
-                    print(f'[{timestamp()}] Updating labels batch={batch+1}/{len(dataloader)}')
-
                 x, y = x.to(device), y.to(device)
                 logit = model(x)
                 
@@ -58,10 +61,38 @@ class CurriculumLabeling(Dataset):
                 
                 self.selections[batch*batch_size: (batch+1)*batch_size] = torch.logical_and(selection, torch.isnan(y)).cpu()
         
-        if not verbose:
-            print()
+                if ground_truth is not None:
+                    span = slice(batch * batch_size, (batch + 1) * batch_size)
+                    truth = ground_truth[span]
+                    hidden = torch.isnan(y).cpu() & ((truth == 0) | (truth == 1))
+                    selected = self.selections[span] & hidden
+                    positive = selected & (self.labels[span] == 1)
+                    negative = selected & (self.labels[span] == 0)
+                    counts += torch.stack([
+                        (hidden & (truth == 1)).sum(), (hidden & (truth == 0)).sum(),
+                        positive.sum(), negative.sum(),
+                        (positive & (truth == 1)).sum(), (negative & (truth == 0)).sum(),
+                    ])
 
         self.dataset.transform = temp
+
+        if not verbose:
+            metrics = 'metrics=N/A (ground truth unavailable)'
+            if ground_truth is not None:
+                total_pos, total_neg, selected_pos, selected_neg, correct_pos, correct_neg = counts.tolist()
+                def ratio(correct, total):
+                    return f'{correct / total:.2%}' if total else 'N/A'
+                metrics = (
+                    f'overall_accuracy={ratio(correct_pos + correct_neg, selected_pos + selected_neg)} '
+                    f'overall_recall={ratio(correct_pos + correct_neg, total_pos + total_neg)} '
+                    f'positive_accuracy={ratio(correct_pos, selected_pos)} '
+                    f'positive_recall={ratio(correct_pos, total_pos)} '
+                    f'negative_accuracy={ratio(correct_neg, selected_neg)} '
+                    f'negative_recall={ratio(correct_neg, total_neg)} '
+                    f'selected_pos={selected_pos} selected_neg={selected_neg} '
+                    f'hidden_pos={total_pos} hidden_neg={total_neg}'
+                )
+            print(f'[{timestamp()}] Pseudo-label update completed: batches={len(dataloader)} {metrics}', flush=True)
 
     def get_pseudo_label_proportion(self):
         num_pseudo_labels = torch.count_nonzero(self.selections)

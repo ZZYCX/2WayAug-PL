@@ -28,6 +28,12 @@ class MLCPLDataset(Dataset):
         return img, target
     
     def drop_labels_random(self, target_partial_ratio, seed=526):
+        # Evaluation only: never returned by __getitem__ or used as training targets.
+        if not hasattr(self, 'ground_truth'):
+            self.ground_truth = torch.full((len(self), self.num_categories), -1, dtype=torch.int8)
+            for i, (_, _, positives, negatives, _) in enumerate(self.records):
+                self.ground_truth[i, positives] = 1
+                self.ground_truth[i, negatives] = 0
         self.records = drop_labels(self.records, target_partial_ratio, seed=seed)
         return self
     
