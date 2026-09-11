@@ -1,3 +1,4 @@
+import math
 import torchmetrics
 from mlcpl.loss import *
 from torch.utils.data import DataLoader
@@ -59,8 +60,8 @@ def main():
     ema = ModelEma(model, config.ema)
 
     optimizer = torch.optim.Adam(parameters, lr=config.lr, weight_decay=0)
-    steps_per_epoch = len(train_dataloader)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, config.lr, steps_per_epoch=steps_per_epoch, epochs=config.epochs, pct_start=0.2)
+    optimizer_steps_per_epoch = math.ceil(len(train_dataloader) / config.accum_step)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=config.lr, steps_per_epoch=optimizer_steps_per_epoch, epochs=config.epochs, pct_start=0.2)
 
     log_dir = os.path.join(output_dir, 'log')
     Path(output_dir).mkdir(parents=True, exist_ok=True)

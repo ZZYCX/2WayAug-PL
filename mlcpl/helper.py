@@ -52,7 +52,7 @@ class MultiLogger():
         if self.tblog:
             if type(value) == dict:
                 self.tblog.add_scalars(tag, value, tag_count)
-            elif torch.is_tensor or isinstance(value, np.ndarray):
+            elif torch.is_tensor(value) or isinstance(value, np.ndarray):
                 if len(value.shape) == 0:
                     # scalar
                     self.tblog.add_scalar(tag, value, tag_count)
@@ -65,7 +65,7 @@ class MultiLogger():
         if self.excellog:
             if type(value) == dict:
                 self.excellog.add(tag, value)
-            elif torch.is_tensor or isinstance(value, np.ndarray):
+            elif torch.is_tensor(value) or isinstance(value, np.ndarray):
                 if len(value.shape) == 0:
                     # scalar
                     self.excellog.add(tag, value)
