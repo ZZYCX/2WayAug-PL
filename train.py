@@ -1,4 +1,3 @@
-import math
 import random
 import numpy as np
 import torchmetrics
@@ -16,6 +15,19 @@ import time
 from train_eval_fn import *
 from mlcpl.sample_mix import *
 from mlcpl.curriculum_labeling import CurriculumLabeling
+
+def seed_everything(seed):
+    """Seed training RNGs before model creation or any CUDA work."""
+    # Required for deterministic CUDA matrix multiplication (CUDA >= 10.2).
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True)
+
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
@@ -40,6 +52,7 @@ def make_dataloader(dataset, *, shuffle, num_workers=None):
 
 
 def main():
+    seed_everything(config.seed)
     device = config.device
     output_dir = 'output/train'
 
@@ -85,8 +98,8 @@ def main():
     ema = ModelEma(model, config.ema)
 
     optimizer = torch.optim.Adam(parameters, lr=config.lr, weight_decay=0)
-    optimizer_steps_per_epoch = math.ceil(len(train_dataloader) / config.accum_step)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=config.lr, steps_per_epoch=optimizer_steps_per_epoch, epochs=config.epochs, pct_start=0.2)
+    steps_per_epoch = len(train_dataloader)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=config.lr, steps_per_epoch=steps_per_epoch, epochs=config.epochs, pct_start=0.2)
 
     log_dir = os.path.join(output_dir, 'log')
     Path(output_dir).mkdir(parents=True, exist_ok=True)
