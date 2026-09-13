@@ -51,4 +51,4 @@ data_aug = (
     # torchvision.transforms.LinearTransformation(),
 )
 
-device = 'cuda:1'
+device = 'cuda:0'

@@ -7,6 +7,7 @@ import torchvision
 import torch
 from mlcpl.helper import *
 import os
+import sys
 from pathlib import Path
 import torchmetrics
 from models import Model
@@ -15,6 +16,20 @@ import time
 from train_eval_fn import *
 from mlcpl.sample_mix import *
 from mlcpl.curriculum_labeling import CurriculumLabeling
+
+
+class Tee:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        for stream in self.streams:
+            stream.write(data)
+
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
+
 
 def seed_everything(seed):
     """Seed training RNGs before model creation or any CUDA work."""
@@ -175,4 +190,16 @@ def main():
     logger.flush()
 
 if __name__=='__main__':
-    main()
+    Path('output').mkdir(parents=True, exist_ok=True)
+    log_path = Path('output') / f'{time.strftime("%Y%m%d_%H%M%S")}.txt'
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    with open(log_path, 'w', encoding='utf-8') as log_file:
+        sys.stdout = Tee(original_stdout, log_file)
+        sys.stderr = Tee(original_stderr, log_file)
+        try:
+            print(f'Training log file: {log_path}')
+            main()
+        finally:
+            sys.stdout = original_stdout
+            sys.stderr = original_stderr
